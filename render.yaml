@@ -138,7 +138,7 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_BASE_URL
-        value: https://deep-search-ai-p8gi.onrender.com
+        value: https://hackthon-for-aft8.onrender.com
 
 databases:
   - name: deepsearch-db
