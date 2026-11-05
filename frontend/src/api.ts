@@ -1,5 +1,4 @@
-// Production API is intentionally fixed here so an old Render VITE_API_BASE_URL cannot route auth requests to a stale service.
-export const API="https://deep-search-ai-p8gi.onrender.com";
+export const API = (import.meta.env.VITE_API_BASE_URL || "https://hackthon-for-aft8.onrender.com").replace(/\/+$/, "");
 let token=sessionStorage.getItem("deep_token")||"";
 
 export function setAuthToken(value:string){
