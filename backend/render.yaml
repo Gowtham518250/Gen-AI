@@ -1,3 +1,5 @@
+# Standalone backend deployment.
+# For the complete production stack, deploy the root-level ../render.yaml Blueprint.
 services:
   - type: web
     name: deepsearch-api
