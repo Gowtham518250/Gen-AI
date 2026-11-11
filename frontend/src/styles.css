@@ -1789,3 +1789,21 @@
 @media(prefers-reduced-motion:reduce){
   .ingest-transfer-meter i{transition:none}
 }
+
+/* Keep a compact sign-out control reachable on small screens. */
+@media(max-width:850px){
+  .dashboard-sidebar .sidebar-profile{
+    display:flex!important;
+    position:absolute;
+    top:8px;
+    right:12px;
+    width:auto;
+    margin:0;
+    padding:3px 6px;
+    gap:5px;
+    border:1px solid #26385d;
+    background:#09111f;
+  }
+  .dashboard-sidebar .sidebar-profile>div:nth-child(2){display:none}
+  .dashboard-sidebar .profile-avatar{width:26px;height:26px}
+}
