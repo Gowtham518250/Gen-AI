@@ -779,6 +779,15 @@ function Dashboard(){
         <label className="dashboard-upload">{uploading?<Activity size={15}/>:<Upload size={15}/>} {uploading?"Indexing…":"Upload Files"}<input type="file" hidden accept=".pdf,.docx,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.txt,.md" onChange={beginUpload} disabled={uploading}/></label>
       </header>
 
+      <section className="demo-invite-banner">
+        <div>
+          <small>INTERACTIVE PRODUCT WALKTHROUGH</small>
+          <b>Explore DeepSearch with a sample workspace</b>
+          <span>Try document questions, ranked evidence and source citations without waiting for your private uploads to finish indexing.</span>
+        </div>
+        <button onClick={()=>navigate("/demo")}>Open interactive demo <ArrowRight size={14}/></button>
+      </section>
+
       <section className="dashboard-search-hero">
         <div className="dashboard-searchbar">
           <Search size={19}/>
@@ -1243,10 +1252,15 @@ function UploadFlowPage(){
           <div>
             <b>Background indexing is taking longer than expected</b>
             <span>Your file is safely uploaded, but the queue has not started processing it. You can run a direct recovery now; this extracts the document and rebuilds its searchable chunks.</span>
-            <button className='ingest-recovery-button' onClick={recoverIndex} disabled={recovering}>
-              {recovering?<Activity size={15}/> : <RefreshCcw size={15}/>}
-              {recovering?'Recovering and indexing…':'Recover indexing now'}
-            </button>
+            <div className='ingest-recovery-actions'>
+              <button className='ingest-recovery-button' onClick={recoverIndex} disabled={recovering}>
+                {recovering?<Activity size={15}/> : <RefreshCcw size={15}/>}
+                {recovering?'Recovering and indexing…':'Recover indexing now'}
+              </button>
+              <button className='ingest-demo-button' onClick={()=>navigate('/demo')}>
+                Explore sample demo <ArrowRight size={14}/>
+              </button>
+            </div>
           </div>
         </div>
       }
@@ -1293,6 +1307,165 @@ function UploadFlowPage(){
           <button onClick={()=>navigate('/dashboard')}>Back to dashboard</button>
         </section>
       }
+    </main>
+  </div>;
+}
+
+function DemoWorkspacePage(){
+  const [question,setQuestion]=useState("What was the total Q3 revenue?");
+  const [asked,setAsked]=useState("What was the total Q3 revenue?");
+  const [activeDoc,setActiveDoc]=useState("revenue");
+
+  const documents=[
+    {id:"revenue",name:"Quarterly Revenue Report.xlsx",type:"XLSX",meta:"Q3 Summary · Category Breakdown",detail:"Revenue performance and product category totals"},
+    {id:"handbook",name:"Employee Handbook.pdf",type:"PDF",meta:"Page 14 · Leave & Benefits",detail:"Illustrative leave policy and employee benefits"},
+    {id:"roadmap",name:"Product Roadmap.docx",type:"DOCX",meta:"Section 3 · Delivery Plan",detail:"Product milestones and release priorities"}
+  ];
+
+  const examples=[
+    "What was the total Q3 revenue?",
+    "Which product category performed best?",
+    "How many annual leave days are provided?",
+    "What are the product roadmap milestones?"
+  ];
+
+  const answerFor=(q:string)=>{
+    const normalized=q.toLowerCase();
+    if(/revenue|q3|quarter|sales total/.test(normalized)){
+      return {
+        title:"Q3 revenue summary",
+        answer:"In this sample dataset, total Q3 revenue was ₹48.6 lakh, representing an 18% increase over the previous quarter.",
+        confidence:96,
+        source:"Quarterly Revenue Report.xlsx",
+        ref:"Q3 Summary · Row 8",
+        excerpt:"Total Revenue: ₹48.6 lakh · Previous Quarter: ₹41.2 lakh · Quarter-on-quarter growth: 18%."
+      };
+    }
+    if(/category|product|performed|best.sell|top.sell/.test(normalized)){
+      return {
+        title:"Top-performing category",
+        answer:"Electronics was the leading category in this sample dataset, contributing ₹19.2 lakh in Q3 revenue.",
+        confidence:94,
+        source:"Quarterly Revenue Report.xlsx",
+        ref:"Category Breakdown · Row 3",
+        excerpt:"Electronics: ₹19.2 lakh · Home & Living: ₹14.1 lakh · Accessories: ₹9.8 lakh."
+      };
+    }
+    if(/leave|holiday|annual|sick/.test(normalized)){
+      return {
+        title:"Employee leave policy",
+        answer:"The sample handbook provides 18 annual leave days and 10 sick leave days per calendar year. Refer to the cited policy section for the full terms.",
+        confidence:97,
+        source:"Employee Handbook.pdf",
+        ref:"Page 14 · Leave Entitlement",
+        excerpt:"Annual leave entitlement: 18 working days per calendar year. Sick leave entitlement: 10 working days per calendar year."
+      };
+    }
+    if(/roadmap|milestone|release|launch|delivery/.test(normalized)){
+      return {
+        title:"Product roadmap milestones",
+        answer:"The sample roadmap lists three milestones: private beta, collaborative workspaces, and enterprise audit controls.",
+        confidence:92,
+        source:"Product Roadmap.docx",
+        ref:"Section 3 · Delivery Plan",
+        excerpt:"Milestone 1: Private beta. Milestone 2: Collaborative workspaces. Milestone 3: Enterprise audit controls."
+      };
+    }
+    return {
+      title:"No matching sample evidence",
+      answer:"This interactive preview contains three illustrative documents. Try one of the suggested questions to see how DeepSearch presents an answer with its supporting source.",
+      confidence:0,
+      source:"",
+      ref:"",
+      excerpt:"No sample evidence was selected for this question."
+    };
+  };
+
+  const [answer,setAnswer]=useState(()=>answerFor("What was the total Q3 revenue?"));
+
+  function runQuestion(value=question){
+    const clean=value.trim();
+    if(!clean)return;
+    setQuestion(clean);
+    setAsked(clean);
+    setAnswer(answerFor(clean));
+  }
+
+  const sourceDoc=documents.find(d=>d.name===answer.source);
+  const active=documents.find(d=>d.id===activeDoc)||documents[0];
+
+  return <div className="demo-page">
+    <header className="demo-topbar">
+      <button className="demo-back" onClick={()=>navigate(sessionStorage.getItem("deep_token")?"/dashboard":"/")}>
+        <ArrowRight size={14} style={{transform:"rotate(180deg)"}/> Back to {sessionStorage.getItem("deep_token")?"workspace":"home"}
+      </button>
+      <div className="demo-brand"><span className="brand-glyph">◆</span> DEEP<span>SEARCH</span></div>
+      <span className="demo-mode-pill">SAMPLE DATA · PREVIEW</span>
+    </header>
+
+    <main className="demo-main">
+      <section className="demo-hero">
+        <div className="demo-eyebrow"><span/> INTERACTIVE PRODUCT PREVIEW</div>
+        <h1>Ask your documents.<br/><span>See the evidence.</span></h1>
+        <p>Explore a sample DeepSearch workspace with document discovery, direct questions and traceable citations.</p>
+        <div className="demo-disclosure"><ShieldCheck size={15}/> This preview uses bundled illustrative sample data. It does not read or change your private uploads.</div>
+      </section>
+
+      <section className="demo-metrics">
+        <div><span>SAMPLE DOCUMENTS</span><b>03</b><small>PDF · DOCX · XLSX</small></div>
+        <div><span>EXAMPLE QUESTIONS</span><b>04</b><small>Preloaded scenarios</small></div>
+        <div><span>ANSWER FORMAT</span><b>Evidence</b><small>Answer + source citation</small></div>
+        <div><span>MODE</span><b>Preview</b><small>Local interactive demo</small></div>
+      </section>
+
+      <section className="demo-workspace">
+        <aside className="demo-doc-panel">
+          <div className="demo-panel-heading"><div><small>YOUR SAMPLE CORPUS</small><b>Workspace files</b></div><span>03 FILES</span></div>
+          <div className="demo-doc-list">
+            {documents.map(doc=><button key={doc.id} className={"demo-doc-card "+(activeDoc===doc.id?"active":"")} onClick={()=>setActiveDoc(doc.id)}>
+              <span className={"demo-doc-icon "+doc.type.toLowerCase()}>{doc.type==="XLSX"?<Sheet size={18}/>:<FileText size={18}/>}</span>
+              <span className="demo-doc-copy"><b>{doc.name}</b><small>{doc.meta}</small><em>{doc.detail}</em></span>
+              <ChevronRight size={14}/>
+            </button>)}
+          </div>
+          <div className="demo-selected-file">
+            <small>SELECTED SOURCE</small>
+            <b>{active.name}</b>
+            <span>{active.detail}</span>
+          </div>
+        </aside>
+
+        <div className="demo-answer-panel">
+          <div className="demo-panel-heading"><div><small>DEEPSEARCH ASSISTANT</small><b>Ask the sample workspace</b></div><span className="demo-ready"><i/> READY</span></div>
+          <form className="demo-question-form" onSubmit={e=>{e.preventDefault();runQuestion()}}>
+            <Search size={18}/>
+            <input value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Ask a question about the sample files…"/>
+            <button type="submit"><Send size={15}/> Ask</button>
+          </form>
+          <div className="demo-prompts">
+            <small>TRY A QUESTION</small>
+            <div>{examples.map((item,i)=><button key={item} className={asked===item?"active":""} onClick={()=>runQuestion(item)}>{item}</button>)}</div>
+          </div>
+          <div className="demo-response">
+            <div className="demo-response-head"><span className="demo-ai-icon"><Sparkles size={15}/></span><div><small>PREVIEW ANSWER</small><b>{answer.title}</b></div><span className="demo-confidence">{answer.confidence?answer.confidence+"% match":"—"}</span></div>
+            <p>{answer.answer}</p>
+            {answer.source?
+              <div className="demo-citation">
+                <div><FileText size={15}/><span><b>{answer.source}</b><small>{answer.ref}</small></span><badge className="demo-citation-tag">SAMPLE SOURCE</badge></div>
+                <p>{answer.excerpt}</p>
+              </div>
+              :
+              <div className="demo-no-evidence">{answer.excerpt}</div>
+            }
+          </div>
+          <div className="demo-answer-foot"><ShieldCheck size={14}/> Sample answers are illustrative and only use the bundled preview evidence.</div>
+        </div>
+      </section>
+
+      <div className="demo-bottom-note">
+        <div><b>Ready to try your own files?</b><span>Return to your private workspace to upload documents and search your own corpus.</span></div>
+        <button onClick={()=>navigate(sessionStorage.getItem("deep_token")?"/dashboard":"/login")}>Open private workspace <ArrowRight size={14}/></button>
+      </div>
     </main>
   </div>;
 }
@@ -1437,5 +1610,5 @@ function WorkspacePage(){
 function iconFor(mime:string){if(mime.includes("image"))return <ImageIcon size={18}/>;if(mime.includes("sheet")||mime.includes("csv"))return <Sheet size={18}/>;return <FileText size={18}/>}
 
 function App(){const route=usePath();const path=route.split("?")[0];const token=sessionStorage.getItem("deep_token");useEffect(()=>{if(["/dashboard","/evaluation","/history","/workspace","/ingest","/chat"].includes(path)&&!sessionStorage.getItem("deep_token"))navigate("/login");if(["/login","/register","/forgot-password"].includes(path)&&token)navigate("/dashboard")},[path,token]);
-  if(path==="/")return <HomePage/>;if(path==="/about")return <AboutPage/>;if(path==="/login")return <LoginPage/>;if(path==="/register")return <RegisterPage/>;if(path==="/check-email")return <CheckEmailPage/>;if(path==="/verify-email")return <VerifyEmailPage/>;if(path==="/forgot-password")return <ForgotPasswordPage/>;if(path==="/verify-reset")return <VerifyResetPage/>;if(path==="/reset-password")return <ResetPasswordPage/>;if(path==="/dashboard")return <Dashboard/>;if(path==="/evaluation")return <EvaluationPage/>;if(path==="/history")return <HistoryPage/>;if(path==="/workspace")return <WorkspacePage/>;if(path==="/ingest")return <UploadFlowPage/>;if(path==="/chat")return <ChatPage/>;return <HomePage/>}
+  if(path==="/")return <HomePage/>;if(path==="/about")return <AboutPage/>;if(path==="/login")return <LoginPage/>;if(path==="/register")return <RegisterPage/>;if(path==="/check-email")return <CheckEmailPage/>;if(path==="/verify-email")return <VerifyEmailPage/>;if(path==="/forgot-password")return <ForgotPasswordPage/>;if(path==="/verify-reset")return <VerifyResetPage/>;if(path==="/reset-password")return <ResetPasswordPage/>;if(path==="/dashboard")return <Dashboard/>;if(path==="/evaluation")return <EvaluationPage/>;if(path==="/history")return <HistoryPage/>;if(path==="/workspace")return <WorkspacePage/>;if(path==="/ingest")return <UploadFlowPage/>;if(path==="/demo")return <DemoWorkspacePage/>;if(path==="/chat")return <ChatPage/>;return <HomePage/>}
 createRoot(document.getElementById("root")!).render(<App/>);
