@@ -499,10 +499,15 @@ function AuthShell({kind,title,subtitle,children}:{kind:"login"|"register"|"forg
 function LoginPage(){
   const[email,setEmail]=useState("");const[password,setPassword]=useState("");const[msg,setMsg]=useState("");const[loading,setLoading]=useState(false);const[verifyNeeded,setVerifyNeeded]=useState(false);
   async function submit(e:React.FormEvent){
-    e.preventDefault();setLoading(true);setMsg("");setVerifyNeeded(false);
+    e.preventDefault();
+    if(loading)return;
+    setLoading(true);setMsg("");setVerifyNeeded(false);
     try{await api.login({email,password});navigate("/dashboard")}
-    catch(err:any){setMsg(err.message);setVerifyNeeded(String(err.message).toLowerCase().includes("verify your email"))}
-    finally{setLoading(false)}
+    catch(err:any){
+      const message=err?.message||"Sign-in could not be completed. Please try again.";
+      setMsg(message);
+      setVerifyNeeded(String(message).toLowerCase().includes("verify your email"));
+    }finally{setLoading(false)}
   }
   return <AuthShell kind="login" title="Welcome back" subtitle="Sign in to search your files with evidence-first AI.">
     <form className="auth-form-main" onSubmit={submit}>
@@ -511,7 +516,8 @@ function LoginPage(){
       <label className="check-line"><input type="checkbox"/> <span>Remember me</span></label>
       <button className="auth-submit" disabled={loading}>{loading?"Signing in…":"Sign in"}<ArrowRight size={16}/></button>
     </form>
-    {msg&&<div className="auth-alert">{msg}</div>}
+    {loading&&<div className="auth-request-status" role="status">Connecting securely… We’ll show a clear message if the server does not respond within 30 seconds.</div>}
+    {msg&&<div className="auth-alert" role="alert" aria-live="assertive">{msg}</div>}
     {verifyNeeded&&<button className="auth-secondary" onClick={()=>navigate("/check-email?email="+encodeURIComponent(email))}>Verify email <Mail size={14}/></button>}
     <div className="auth-divider"><span>PRIVATE WORKSPACE</span></div>
     <p className="auth-switch">New here? <button onClick={()=>navigate("/register")}>Create an account</button></p>
@@ -707,6 +713,11 @@ function Dashboard(){
 
   function beginUpload(e:React.ChangeEvent<HTMLInputElement>){
     const file=e.target.files?.[0];if(!file)return;
+    if(file.size>25*1024*1024){
+      setMsg("This file is larger than the 25 MB upload limit. Choose a smaller file.");
+      e.target.value="";
+      return;
+    }
     pendingUploadFile=file;
     e.target.value="";
     navigate("/ingest");
@@ -1011,6 +1022,8 @@ function UploadFlowPage(){
   const[done,setDone]=useState<any>(null);
   const[error,setError]=useState('');
   const[reconnecting,setReconnecting]=useState(false);
+  const[transferProgress,setTransferProgress]=useState(0);
+  const[uploadStarting,setUploadStarting]=useState(false);
   const[job,setJob]=useState<any>(null);
   const file=pendingUploadFile;
   const startedRef=React.useRef(false);
@@ -1035,16 +1048,23 @@ function UploadFlowPage(){
         setError('');
         setStep(0);
         setProgress(5);
+        setTransferProgress(0);
+        setUploadStarting(true);
 
-        const accepted=await api.upload(file);
+        const accepted=await api.upload(file,(loaded,total)=>{
+          if(!alive||total<=0)return;
+          setTransferProgress(Math.min(100,Math.round((loaded/total)*100)));
+        });
         if(!alive)return;
+        setUploadStarting(false);
+        setTransferProgress(100);
         setJob(accepted);
         setProgress(10);
 
         let finished=false;
         let transientFailures=0;
         while(alive&&!finished){
-          await sleep(900);
+          await sleep(1800);
 
           let current:any;
           try{
@@ -1093,6 +1113,7 @@ function UploadFlowPage(){
         }
       }catch(e:any){
         if(!alive)return;
+        setUploadStarting(false);
         setReconnecting(false);
         setError(e.message||'Upload failed. Please retry the upload.');
       }
@@ -1159,6 +1180,17 @@ function UploadFlowPage(){
         </div>
       </section>
 
+      {uploadStarting&&!job&&!error&&
+        <div className='ingest-live-status upload-transfer-status' role='status'>
+          <Activity size={16}/>
+          <div>
+            <b>{transferProgress>=100?'Finishing secure upload…':'Uploading your file…'}</b>
+            <span>{transferProgress>=100?'File sent. Waiting for secure storage and upload confirmation.':transferProgress+'% transferred · Keep this page open while the file is sent.'}</span>
+            <div className='ingest-transfer-meter'><i style={{width:transferProgress+'%'}}/></div>
+          </div>
+        </div>
+      }
+
       {reconnecting&&
         <div className='ingest-live-status'>
           <Activity size={16}/>
@@ -1173,7 +1205,7 @@ function UploadFlowPage(){
         <div className='ingest-live-status'>
           <Activity size={16}/>
           <div>
-            <b>{job.stage==='extracting'?'Reading document…':job.stage==='chunking'?'Creating evidence chunks…':job.stage==='indexing'?'Building semantic index…':'Preparing upload…'}</b>
+            <b>{job.stage==='extracting'?'Reading document…':job.stage==='chunking'?'Creating evidence chunks…':job.stage==='indexing'?'Loading the embedding model and building the semantic index…':'Preparing upload…'}</b>
             <span>{job.progress||0}% complete · You can keep this page open while DeepSearch processes the file.</span>
           </div>
         </div>
@@ -1199,7 +1231,7 @@ function UploadFlowPage(){
         <section className='ingest-error'>
           <AlertTriangle size={18}/>
           <div>
-            <b>{String(error).startsWith('Duplicate file:') ? 'Duplicate file' : 'Indexing failed'}</b>
+            <b>{String(error).startsWith('Duplicate file:') ? 'Duplicate file' : /upload|timed out|connection/i.test(String(error)) ? 'Upload could not be confirmed' : 'Indexing failed'}</b>
             <span>{error}</span>
           </div>
           <button onClick={()=>navigate('/dashboard')}>Back to dashboard</button>

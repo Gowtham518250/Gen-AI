@@ -15,6 +15,7 @@ import jwt
 from fastapi import BackgroundTasks, FastAPI, UploadFile, File, Depends, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
+from starlette.concurrency import run_in_threadpool
 
 from .config import settings
 from .db import init_db, one, all_, exe, jd, jl, now, is_postgres
@@ -786,12 +787,16 @@ async def upload(
         mime_type = file.content_type or "application/octet-stream"
 
         dest = Path(settings.upload_dir) / f"{fid}{ext}"
-        dest.write_bytes(raw)
+        await run_in_threadpool(dest.write_bytes, raw)
 
-        inspect_zip_container(dest)
+        await run_in_threadpool(inspect_zip_container, dest)
 
         storage_key = f"{u['id']}/{fid}/{safe_name}"
-        uploaded_uri = storage.upload_file(
+        # S3 and database-backed storage can block on network or disk I/O.
+        # Keep that work off the ASGI event loop so login, polling and other
+        # users' requests remain responsive during large uploads.
+        uploaded_uri = await run_in_threadpool(
+            storage.upload_file,
             dest,
             storage_key,
             mime_type,
@@ -869,16 +874,16 @@ async def upload(
 
     except HTTPException:
         if uploaded_uri:
-            storage.delete(uploaded_uri)
+            await run_in_threadpool(storage.delete, uploaded_uri)
         raise
     except GuardrailViolation as exc:
         if uploaded_uri:
-            storage.delete(uploaded_uri)
+            await run_in_threadpool(storage.delete, uploaded_uri)
         logger.warning("Upload blocked [%s]: %s", exc.code, exc)
         raise HTTPException(400, str(exc))
     except Exception as exc:
         if uploaded_uri:
-            storage.delete(uploaded_uri)
+            await run_in_threadpool(storage.delete, uploaded_uri)
 
         # Protect against the small race where two identical uploads arrive
         # at the same time and the database unique index wins the race.
