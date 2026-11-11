@@ -1807,3 +1807,13 @@
   .dashboard-sidebar .sidebar-profile>div:nth-child(2){display:none}
   .dashboard-sidebar .profile-avatar{width:26px;height:26px}
 }
+
+/* User-triggered recovery when the background ingestion queue is delayed. */
+.ingest-delayed-status{align-items:flex-start;border-color:#5c4b2d;background:linear-gradient(135deg,#171407,#101522);color:#d8c59b}
+.ingest-delayed-status>svg{flex:0 0 auto;color:#e8b95b;animation:none;margin-top:1px}
+.ingest-delayed-status>div{flex:1;min-width:0}
+.ingest-delayed-status b{font-size:11px;color:#f0d9a7}
+.ingest-delayed-status span{font-size:9px;line-height:1.6;color:#b4a27d}
+.ingest-recovery-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;padding:9px 12px;border:1px solid #8f7139;border-radius:9px;background:linear-gradient(135deg,#7a5b22,#9a6427);color:#fff;font-size:9px;font-weight:800;cursor:pointer}
+.ingest-recovery-button:disabled{opacity:.65;cursor:wait}
+.ingest-recovery-button svg{color:currentColor;animation:none}
