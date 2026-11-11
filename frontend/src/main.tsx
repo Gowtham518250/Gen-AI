@@ -1260,7 +1260,7 @@ function UploadFlowPage(){
         <section className='ingest-result'>
           <div className='ingest-result-head'>
             <CircleCheck size={22}/>
-            <div><b>Indexing complete</b><span>{done.name} is ready for DeepSearch.</span></div>
+            <div><b>{done.recovery_mode==='direct_reindex'?'Direct recovery complete':'Indexing complete'}</b><span>{done.name} is ready for DeepSearch.</span></div>
             <button onClick={()=>navigate('/chat?file='+encodeURIComponent(job?.file_id||done.file_id||''))}>Ask this document <MessageCircle size={14}/></button>
           </div>
           <div className='ingest-stat-grid'>
@@ -1270,6 +1270,12 @@ function UploadFlowPage(){
             <div><span>PROCESSING</span><b>{done.performance?.processing_ms||'—'} ms</b><small>end-to-end ingest</small></div>
           </div>
         </section>
+      }
+
+      {done?.recovery_mode==='direct_reindex'&&Number(done.embedding_chunks||0)===0&&
+        <div className='ingest-fallback-note'>
+          Text extraction and keyword-based retrieval are ready, so you can ask this document questions with citations. Semantic embeddings were unavailable during recovery and can be rebuilt later.
+        </div>
       }
 
       {error&&
