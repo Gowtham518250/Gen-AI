@@ -15,6 +15,7 @@ import jwt
 from fastapi import BackgroundTasks, FastAPI, UploadFile, File, Depends, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
+from starlette.concurrency import run_in_threadpool
 
 from .config import settings
 from .db import init_db, one, all_, exe, jd, jl, now, is_postgres
@@ -735,6 +736,60 @@ def _find_duplicate_file(
     return None
 
 
+def _persist_uploaded_file(
+    file_id: str,
+    user_id: str,
+    name: str,
+    mime_type: str,
+    uploaded_uri: str,
+    content_hash: str,
+    job_id: str,
+    created_at: str,
+) -> None:
+    """Persist upload metadata without blocking the ASGI event loop."""
+    exe(
+        """
+        INSERT INTO files
+            (id,user_id,name,mime_type,path,status,ocr_used,page_count,
+             chunk_count,created_at,content_hash)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (
+            file_id,
+            user_id,
+            name,
+            mime_type,
+            uploaded_uri,
+            "processing",
+            0,
+            0,
+            0,
+            created_at,
+            content_hash,
+        ),
+    )
+    exe(
+        """
+        INSERT INTO upload_jobs
+            (id,user_id,file_id,name,status,stage,progress,error,result,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (
+            job_id,
+            user_id,
+            file_id,
+            name,
+            "queued",
+            "uploaded",
+            10,
+            None,
+            None,
+            created_at,
+            created_at,
+        ),
+    )
+
+
 @app.post("/api/files/upload")
 async def upload(
     request: Request,
@@ -765,7 +820,8 @@ async def upload(
         # Exact-content deduplication is intentionally scoped to each user's
         # private workspace. A file with a different name but identical bytes
         # is still the same upload.
-        existing = _find_duplicate_file(
+        existing = await run_in_threadpool(
+            _find_duplicate_file,
             u["id"],
             content_hash,
             ext,
@@ -786,61 +842,35 @@ async def upload(
         mime_type = file.content_type or "application/octet-stream"
 
         dest = Path(settings.upload_dir) / f"{fid}{ext}"
-        dest.write_bytes(raw)
+        await run_in_threadpool(dest.write_bytes, raw)
 
-        inspect_zip_container(dest)
+        await run_in_threadpool(inspect_zip_container, dest)
 
         storage_key = f"{u['id']}/{fid}/{safe_name}"
-        uploaded_uri = storage.upload_file(
+        # S3 and database-backed storage can block on network or disk I/O.
+        # Keep that work off the ASGI event loop so login, polling and other
+        # users' requests remain responsive during large uploads.
+        uploaded_uri = await run_in_threadpool(
+            storage.upload_file,
             dest,
             storage_key,
             mime_type,
         )
 
         created_at = now()
-        exe(
-            """
-            INSERT INTO files
-                (id,user_id,name,mime_type,path,status,ocr_used,page_count,
-                 chunk_count,created_at,content_hash)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)
-            """,
-            (
-                fid,
-                u["id"],
-                safe_name,
-                mime_type,
-                uploaded_uri,
-                "processing",
-                0,
-                0,
-                0,
-                created_at,
-                content_hash,
-            ),
-        )
-        exe(
-            """
-            INSERT INTO upload_jobs
-                (id,user_id,file_id,name,status,stage,progress,error,result,created_at,updated_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)
-            """,
-            (
-                job_id,
-                u["id"],
-                fid,
-                safe_name,
-                "queued",
-                "uploaded",
-                10,
-                None,
-                None,
-                created_at,
-                created_at,
-            ),
+        await run_in_threadpool(
+            _persist_uploaded_file,
+            fid,
+            u["id"],
+            safe_name,
+            mime_type,
+            uploaded_uri,
+            content_hash,
+            job_id,
+            created_at,
         )
 
-        queued = enqueue_job(job_id)
+        queued = await run_in_threadpool(enqueue_job, job_id)
         if queued:
             background_tasks.add_task(_maybe_wake_ingestion_worker, job_id)
         else:
@@ -869,16 +899,16 @@ async def upload(
 
     except HTTPException:
         if uploaded_uri:
-            storage.delete(uploaded_uri)
+            await run_in_threadpool(storage.delete, uploaded_uri)
         raise
     except GuardrailViolation as exc:
         if uploaded_uri:
-            storage.delete(uploaded_uri)
+            await run_in_threadpool(storage.delete, uploaded_uri)
         logger.warning("Upload blocked [%s]: %s", exc.code, exc)
         raise HTTPException(400, str(exc))
     except Exception as exc:
         if uploaded_uri:
-            storage.delete(uploaded_uri)
+            await run_in_threadpool(storage.delete, uploaded_uri)
 
         # Protect against the small race where two identical uploads arrive
         # at the same time and the database unique index wins the race.
@@ -888,7 +918,8 @@ async def upload(
             or "unique constraint" in message
             or "content_hash" in message
         ):
-            duplicate = _find_duplicate_file(
+            duplicate = await run_in_threadpool(
+                _find_duplicate_file,
                 u["id"],
                 content_hash,
                 ext,
@@ -908,7 +939,7 @@ async def upload(
         raise HTTPException(500, "The file could not be uploaded right now.") from exc
     finally:
         if dest is not None:
-            dest.unlink(missing_ok=True)
+            await run_in_threadpool(lambda: dest.unlink(missing_ok=True))
 
 
 @app.get("/api/files/upload-jobs/{job_id}")

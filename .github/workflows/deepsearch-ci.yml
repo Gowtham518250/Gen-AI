@@ -22,7 +22,7 @@ jobs:
       - name: Compile backend
         run: python -m compileall app
       - name: Run guardrail tests
-        run: pytest tests -q
+        run: python -m pytest tests -q
 
   frontend:
     runs-on: ubuntu-latest

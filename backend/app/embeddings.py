@@ -96,8 +96,24 @@ def _embed(text: str) -> list[float]:
     return pooled[0].astype(np.float32).tolist()
 
 
-def embed_texts(texts: list[str]) -> list[list[float]]:
-    return [_embed(text) for text in texts]
+def embed_texts(
+    texts: list[str],
+    progress_callback=None,
+) -> list[list[float]]:
+    """Embed one chunk at a time while optionally reporting real progress."""
+    vectors: list[list[float]] = []
+    total = len(texts)
+
+    for index, text in enumerate(texts, start=1):
+        vectors.append(_embed(text))
+        if progress_callback and (index % 5 == 0 or index == total):
+            try:
+                progress_callback(index, total)
+            except Exception:
+                # Progress reporting must never make ingestion fail.
+                pass
+
+    return vectors
 
 
 def embed_query(text: str) -> list[float]:

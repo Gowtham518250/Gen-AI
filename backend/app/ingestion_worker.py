@@ -202,8 +202,20 @@ def _process_upload_job(
 
             embedding_started = time.perf_counter()
             vectors: list[list[float]] = []
+
+            def report_embedding_progress(completed: int, total: int) -> None:
+                progress = 60 + int(25 * completed / max(1, total))
+                _update_upload_job(
+                    job_id,
+                    stage="indexing",
+                    progress=min(85, progress),
+                )
+
             try:
-                vectors = embed_texts(chunks)
+                vectors = embed_texts(
+                    chunks,
+                    progress_callback=report_embedding_progress,
+                )
             except Exception as exc:
                 logger.warning(
                     "Embedding generation failed for %s: %s",
@@ -246,6 +258,14 @@ def _process_upload_job(
                 )
                 if embedding:
                     embedding_pairs.append((chunk_id, embedding))
+
+                if (i + 1) % 20 == 0 or i + 1 == len(chunks):
+                    progress = 85 + int(14 * (i + 1) / max(1, len(chunks)))
+                    _update_upload_job(
+                        job_id,
+                        stage="indexing",
+                        progress=min(99, progress),
+                    )
 
             exe(
                 "UPDATE files SET status=?, ocr_used=?, page_count=?, chunk_count=? WHERE id=? AND user_id=?",
