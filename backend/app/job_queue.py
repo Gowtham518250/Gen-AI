@@ -79,42 +79,56 @@ def _invalidate_client() -> None:
             pass
 
 
-def force_enqueue_job(job_id: str) -> bool:
-    """Ensure a queued job is present in Redis even if its pending marker
-    became stale or the list item was lost during a worker restart."""
-    client = _client()
-    if client is None:
-        return False
+_ENQUEUE_JOB_SCRIPT = """
+local queue_key = KEYS[1]
+local pending_key = KEYS[2]
+local job_id = ARGV[1]
 
+-- The list is authoritative. A pending marker can survive a partial enqueue
+-- (SADD succeeded but RPUSH did not), so never use the set alone to decide
+-- whether the job is already waiting.
+if redis.call("LPOS", queue_key, job_id) then
+    redis.call("SADD", pending_key, job_id)
+    return 0
+end
+
+-- Redis executes this script atomically, closing the SADD/RPUSH failure gap.
+redis.call("SADD", pending_key, job_id)
+redis.call("RPUSH", queue_key, job_id)
+return 1
+"""
+
+
+def _enqueue_job_atomically(client, job_id: str) -> bool:
     try:
-        # Remove only the dedup marker, then push the job again. The worker's
-        # status claim makes duplicate queue entries harmless.
-        client.srem(PENDING_SET, job_id)
-        client.sadd(PENDING_SET, job_id)
-        client.rpush(QUEUE_NAME, job_id)
-        return True
-    except Exception:
-        logger.exception("Could not force-enqueue ingestion job %s", job_id)
-        _invalidate_client()
-        return False
-
-
-def enqueue_job(job_id: str) -> bool:
-    client = _client()
-    if client is None:
-        return False
-
-    try:
-        # SADD makes enqueue idempotent. Recovery runs periodically, so the
-        # same queued database row is not pushed repeatedly into Redis.
-        added = client.sadd(PENDING_SET, job_id)
-        if added:
-            client.rpush(QUEUE_NAME, job_id)
+        client.eval(
+            _ENQUEUE_JOB_SCRIPT,
+            2,
+            QUEUE_NAME,
+            PENDING_SET,
+            job_id,
+        )
         return True
     except Exception:
         logger.exception("Could not enqueue ingestion job %s", job_id)
         _invalidate_client()
         return False
+
+
+def force_enqueue_job(job_id: str) -> bool:
+    """Ensure a queued job is in Redis, repairing stale pending markers."""
+    client = _client()
+    if client is None:
+        return False
+    return _enqueue_job_atomically(client, job_id)
+
+
+def enqueue_job(job_id: str) -> bool:
+    """Idempotently enqueue a job and repair an orphaned pending marker."""
+    client = _client()
+    if client is None:
+        return False
+    return _enqueue_job_atomically(client, job_id)
 
 
 def recover_jobs() -> dict[str, int]:
@@ -314,6 +328,11 @@ def _worker_loop(process_job: Callable[[str], None]) -> None:
             continue
 
         _, job_id = item
+        logger.info(
+            "Ingestion worker dequeued job=%s queue=%s",
+            job_id,
+            QUEUE_NAME,
+        )
 
         try:
             client.srem(PENDING_SET, job_id)
