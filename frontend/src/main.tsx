@@ -1093,9 +1093,14 @@ function UploadFlowPage(){
           setJob(current);
           setProgress(Number(current.progress)||0);
 
+          // Show a recovery path whenever an accepted upload remains
+          // at its initial 10% progress, regardless of the backend status
+          // label. Some deployments can report "processing" before the
+          // worker has actually claimed and advanced the job.
           if(
-            current.status==='queued' &&
-            Date.now()-acceptedAt>=30000
+            !['complete','failed'].includes(current.status) &&
+            Number(current.progress||0)<=10 &&
+            Date.now()-acceptedAt>=15000
           ){
             setDelayed(true);
           }
