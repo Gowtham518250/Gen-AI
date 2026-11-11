@@ -1146,12 +1146,13 @@ def reindex_file(file_id: str, u=Depends(user)):
             rebuild_user_index(u["id"])
             bump_search_version(u["id"])
 
-            return {
+            result = {
                 "file_id": file_id,
                 "name": row["name"],
                 "status": "reindexed",
                 "chunks": len(chunks),
                 "embedding_chunks": len(embedding_pairs),
+                "recovery_mode": "direct_reindex",
                 "performance": {
                     "processing_ms": round((time.perf_counter() - started_at) * 1000, 1),
                     "extraction_ms": round(extract_ms, 1),
@@ -1159,6 +1160,28 @@ def reindex_file(file_id: str, u=Depends(user)):
                     "ocr_used": bool(ocr),
                 },
             }
+
+            # A direct re-index is the user-triggered recovery path when the
+            # background queue is unavailable. Mark its queued upload job as
+            # complete so the UI can leave the 10% state and the worker will
+            # not later process the same queued job a second time.
+            exe(
+                """
+                UPDATE upload_jobs
+                SET status='complete', stage='ready', progress=100,
+                    error=NULL, result=?, updated_at=?
+                WHERE file_id=? AND user_id=?
+                  AND status IN ('queued', 'processing')
+                """,
+                (jd(result), now(), file_id, u["id"]),
+            )
+            logger.info(
+                "Direct re-index recovery completed file=%s chunks=%s vectors=%s",
+                file_id,
+                len(chunks),
+                len(embedding_pairs),
+            )
+            return result
     except GuardrailViolation as exc:
         raise HTTPException(400, str(exc))
     except Exception as exc:
