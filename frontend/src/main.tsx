@@ -325,6 +325,7 @@ function HomePage(){
         <a href="#how-it-works" onClick={(e)=>{e.preventDefault();scrollToSection("how-it-works")}}>How it works</a>
         <a href="#architecture" onClick={(e)=>{e.preventDefault();scrollToSection("architecture")}}>Architecture</a>
         <a href="#use-cases" onClick={(e)=>{e.preventDefault();scrollToSection("use-cases")}}>Use Cases</a>
+        <a href="/demo" onClick={(e)=>{e.preventDefault();navigate("/demo")}}>Interactive demo</a>
         <a href="#pricing" onClick={(e)=>{e.preventDefault();scrollToSection("pricing")}}>Pricing</a>
       </nav>
       <button className="nav-about" onClick={()=>navigate("/about")}>About DeepSearch <ArrowRight size={14}/></button>
@@ -1391,7 +1392,6 @@ function DemoWorkspacePage(){
     setAnswer(answerFor(clean));
   }
 
-  const sourceDoc=documents.find(d=>d.name===answer.source);
   const active=documents.find(d=>d.id===activeDoc)||documents[0];
 
   return <div className="demo-page">
