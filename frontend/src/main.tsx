@@ -805,7 +805,7 @@ function Dashboard(){
         <div id="recent-files" className="panel-box">
           <div className="panel-heading"><div><b>Recent Files</b><span>Your latest indexed documents</span></div><button onClick={scrollFiles}>View all →</button></div>
           <div className="recent-file-list">
-            {recentFiles.length?recentFiles.map(f=><div key={f.id} className="recent-file-row-wrap"><button onClick={()=>openFile(f.id)} className="recent-file-row"><div className="recent-file-icon">{iconFor(f.mime_type||"")}</div><div><b>{f.name}</b><small>{f.mime_type||"file"} · {f.chunk_count} chunks</small></div><ChevronRight size={14}/></button><button className="recent-file-chat" onClick={()=>navigate("/chat?file="+encodeURIComponent(f.id))}><MessageCircle size={14}/><span>Chat</span></button></div>):<div className="dashboard-empty"><FileSearch size={24}/><b>No files yet</b><span>Upload your first document.</span></div>}
+            {recentFiles.length?recentFiles.map(f=><div key={f.id} className="recent-file-row-wrap"><button onClick={()=>openFile(f.id)} className="recent-file-row"><div className="recent-file-icon">{iconFor(f.mime_type||"")}</div><div><b>{f.name}</b><small>{f.mime_type||"file"} · {f.chunk_count} chunks · {f.status==='indexed'?'SEARCH READY':f.status==='processing'?'UPLOADED · INDEXING':'UPLOADED'}</small></div><ChevronRight size={14}/></button><button className="recent-file-chat" onClick={()=>navigate("/chat?file="+encodeURIComponent(f.id))}><MessageCircle size={14}/><span>Chat</span></button></div>):<div className="dashboard-empty"><FileSearch size={24}/><b>No files yet</b><span>Upload your first document.</span></div>}
           </div>
         </div>
 
