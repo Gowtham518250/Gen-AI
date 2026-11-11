@@ -1,4 +1,4 @@
-export const API = (import.meta.env.VITE_API_BASE_URL || "https://hackthon-for-aft8.onrender.com").replace(/\\/+$/, "");
+export const API = (import.meta.env.VITE_API_BASE_URL || "https://hackthon-for-aft8.onrender.com").replace(/\/+$/, "");
 let token=sessionStorage.getItem("deep_token")||"";
 
 const LOGIN_TIMEOUT_MS = 30_000;
