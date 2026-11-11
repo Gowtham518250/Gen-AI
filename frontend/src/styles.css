@@ -1817,3 +1817,4 @@
 .ingest-recovery-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;padding:9px 12px;border:1px solid #8f7139;border-radius:9px;background:linear-gradient(135deg,#7a5b22,#9a6427);color:#fff;font-size:9px;font-weight:800;cursor:pointer}
 .ingest-recovery-button:disabled{opacity:.65;cursor:wait}
 .ingest-recovery-button svg{color:currentColor;animation:none}
+.ingest-fallback-note{margin-top:10px;padding:10px 12px;border:1px solid #39466b;border-radius:10px;background:#0b1426;color:#9eafd2;font-size:9px;line-height:1.65}
