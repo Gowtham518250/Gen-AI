@@ -1451,7 +1451,7 @@ function DemoWorkspacePage(){
             <p>{answer.answer}</p>
             {answer.source?
               <div className="demo-citation">
-                <div><FileText size={15}/><span><b>{answer.source}</b><small>{answer.ref}</small></span><badge className="demo-citation-tag">SAMPLE SOURCE</badge></div>
+                <div><FileText size={15}/><span><b>{answer.source}</b><small>{answer.ref}</small></span><span className="demo-citation-tag">SAMPLE SOURCE</span></div>
                 <p>{answer.excerpt}</p>
               </div>
               :
