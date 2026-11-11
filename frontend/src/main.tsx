@@ -1022,6 +1022,8 @@ function UploadFlowPage(){
   const[done,setDone]=useState<any>(null);
   const[error,setError]=useState('');
   const[reconnecting,setReconnecting]=useState(false);
+  const[delayed,setDelayed]=useState(false);
+  const[recovering,setRecovering]=useState(false);
   const[transferProgress,setTransferProgress]=useState(0);
   const[uploadStarting,setUploadStarting]=useState(false);
   const[job,setJob]=useState<any>(null);
@@ -1061,6 +1063,7 @@ function UploadFlowPage(){
         setJob(accepted);
         setProgress(10);
 
+        const acceptedAt=Date.now();
         let finished=false;
         let transientFailures=0;
         while(alive&&!finished){
@@ -1090,6 +1093,13 @@ function UploadFlowPage(){
           setJob(current);
           setProgress(Number(current.progress)||0);
 
+          if(
+            current.status==='queued' &&
+            Date.now()-acceptedAt>=30000
+          ){
+            setDelayed(true);
+          }
+
           const mapped=
             current.stage==='uploaded'||current.stage==='queued'?0:
             current.stage==='extracting'?1:
@@ -1101,6 +1111,7 @@ function UploadFlowPage(){
           if(current.status==='complete'){
             finished=true;
             setReconnecting(false);
+            setDelayed(false);
             setStep(4);
             setProgress(100);
             setDone(current.result);
@@ -1121,6 +1132,26 @@ function UploadFlowPage(){
 
     return()=>{alive=false};
   },[file]);
+
+  async function recoverIndex(){
+    const fileId=job?.file_id;
+    if(!fileId||recovering)return;
+    setRecovering(true);
+    setError('');
+    try{
+      const result=await api.reindexFile(fileId);
+      setJob((current:any)=>({...current,status:'complete',stage:'ready',progress:100}));
+      setProgress(100);
+      setStep(4);
+      setDelayed(false);
+      setDone(result);
+      pendingUploadFile=null;
+    }catch(e:any){
+      setError(e.message||'Direct indexing could not recover this file. Please check the file and retry.');
+    }finally{
+      setRecovering(false);
+    }
+  }
 
   return <div className='ingest-flow-page'>
     <header className='ingest-flow-header'>
@@ -1201,7 +1232,21 @@ function UploadFlowPage(){
         </div>
       }
 
-      {job&&!done&&!error&&!reconnecting&&
+      {delayed&&!done&&!error&&
+        <div className='ingest-live-status ingest-delayed-status' role='status'>
+          <AlertTriangle size={18}/>
+          <div>
+            <b>Background indexing is taking longer than expected</b>
+            <span>Your file is safely uploaded, but the queue has not started processing it. You can run a direct recovery now; this extracts the document and rebuilds its searchable chunks.</span>
+            <button className='ingest-recovery-button' onClick={recoverIndex} disabled={recovering}>
+              {recovering?<Activity size={15}/> : <RefreshCcw size={15}/>}
+              {recovering?'Recovering and indexing…':'Recover indexing now'}
+            </button>
+          </div>
+        </div>
+      }
+
+      {job&&!done&&!error&&!reconnecting&&!delayed&&
         <div className='ingest-live-status'>
           <Activity size={16}/>
           <div>
@@ -1216,7 +1261,7 @@ function UploadFlowPage(){
           <div className='ingest-result-head'>
             <CircleCheck size={22}/>
             <div><b>Indexing complete</b><span>{done.name} is ready for DeepSearch.</span></div>
-            <button onClick={()=>navigate('/dashboard')}>Search this file <ArrowRight size={14}/></button>
+            <button onClick={()=>navigate('/chat?file='+encodeURIComponent(job?.file_id||done.file_id||''))}>Ask this document <MessageCircle size={14}/></button>
           </div>
           <div className='ingest-stat-grid'>
             <div><span>CHUNKS</span><b>{done.chunks}</b><small>retrieval units</small></div>
