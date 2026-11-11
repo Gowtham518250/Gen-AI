@@ -20,6 +20,10 @@ async def lifespan(_app: FastAPI):
             "Render Key Value connectivity."
         )
     logger.info("DeepSearch ingestion worker is ready")
+    logger.info(
+        "Worker startup queue status=%s",
+        worker_status(),
+    )
     try:
         yield
     finally:
